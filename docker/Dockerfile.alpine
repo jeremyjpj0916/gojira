@@ -1,0 +1,58 @@
+FROM alpine:3.8
+
+RUN apk add --update ca-certificates wget
+RUN update-ca-certificates
+
+# Dunnow here, trim these down?
+RUN apk add --no-cache ca-certificates \
+  make gcc make g++ zlib-dev musl-dev pcre-dev \
+  openssl-dev zlib-dev ncurses-dev curl perl \
+  libffi-dev libc-dev git unzip tar openssh m4 xz gnupg \
+  linux-headers bsd-compat-headers patch sed grep rpm bash coreutils \
+  cmake alpine-sdk yaml-dev
+
+# Replace most of busybox
+RUN apk add --update util-linux pciutils usbutils coreutils binutils findutils \
+                     grep
+
+
+# LuaRocks - OpenSSL - OpenResty
+ARG LUAROCKS
+ARG OPENSSL
+ARG OPENRESTY
+ARG KONG_NGX_MODULE
+ARG KONG_BUILD_TOOLS
+
+ENV BUILD_PREFIX=/build
+ENV OPENSSL_INSTALL=${BUILD_PREFIX}/openssl
+ENV OPENRESTY_INSTALL=${BUILD_PREFIX}/openresty
+ENV LUAROCKS_INSTALL=${BUILD_PREFIX}/luarocks
+
+RUN mkdir -p ${BUILD_PREFIX}
+COPY build.sh ${BUILD_PREFIX}
+COPY silent ${BUILD_PREFIX}/silent
+RUN ${BUILD_PREFIX}/build.sh
+
+ENV OPENSSL_DIR=${OPENSSL_INSTALL}
+ENV OPENSSL_LIBDIR=${OPENSSL_INSTALL}
+
+ENV PATH=$PATH:${OPENRESTY_INSTALL}/nginx/sbin:${OPENRESTY_INSTALL}/bin:${LUAROCKS_INSTALL}/bin
+ENV PATH=${OPENSSL_INSTALL}/bin:$PATH
+ENV LD_LIBRARY_PATH=${OPENSSL_INSTALL}/lib:${LD_LIBRARY_PATH}
+
+RUN apk add --update jq httpie
+# Extra tools
+# RUN apt-get update && \
+#     apt-get install -y  \
+#         jq \
+#         httpie \
+#         iputils-ping \
+#         cpanminus \
+#         iproute2
+
+# RUN cpanm --notest Test::Nginx
+# RUN cpanm --notest local::lib
+
+COPY 42-kong-envs.sh /etc/profile.d/
+
+WORKDIR /kong
